@@ -2,63 +2,55 @@
 {
     internal class Player
     {
-        public string name { get; set; } = "";
-        public string[] words { get; set; } = [];
-        public int totalScore { get; set; } = 0;
+        public string Name { get; set; } = "";
+        public string[] Words { get; set; } = [];
+        public int TotalScore { get; set; } = 0;
+        private string _input = string.Empty;
 
         public Player() { }
 
         public Player(string name, string[] words, int score)
         {
-            this.name = name;
-            this.words = words;
-            this.totalScore = totalScore;
+            Name = name;
+            Words = words;
+            TotalScore = score;
         }
         public Player(int num)
         {
             do
             {
-                Console.Write($"Player {num}, type your name: ");
-                string? input = Console.ReadLine();
+                string input = InputOutput.GetInput($"Player {num}, type your name: ");
                 if (string.IsNullOrEmpty(input) || string.IsNullOrWhiteSpace(input))
                 {
-                    Console.WriteLine("Incorrect input. Please try again.");
+                    InputOutput.PrintMessages(messages: ["Incorrect input. Please try again."]);
                 }
                 else
                 {
-                    name = input.Trim();
+                    Name = input.Trim();
                 }
-            } while (string.IsNullOrEmpty(name));
+            } while (string.IsNullOrEmpty(Name));
 
         }
 
-        public void ShowWords()
+        public void InputWord()
         {
-            Console.Write($"Player {name} results:");
-
-            for (int i = 0; i < words.Length; i++)
-            {
-                if (words[i] == null || words[i].Length == 0) { continue; }
-                Console.Write($" {words[i]},");
-            }
-
-            Console.WriteLine(); ;
+            _input = InputOutput.GetInput($"Player {Name}, you turn: ");
         }
 
-        public string? InputWord()
+        public string GetInput()
         {
-            Console.Write($"Player {name}, you turn: ");
-            return Console.ReadLine();
+            return _input; 
         }
 
-        public string[] GetWords() { return words; }
+        public string[] GetWords() { return Words; }
 
-        public void AddWord(string newWord)
+        public void AddWord()
         {
-            var wordsList = words.ToList();
-            wordsList.Add(newWord);
-            words = wordsList.ToArray();
-            totalScore++;
+            var wordsList = Words.ToList();
+            wordsList.Add(_input);
+            Words = wordsList.ToArray();
+            TotalScore++;
+            _input = string.Empty;
         }
     }
 }

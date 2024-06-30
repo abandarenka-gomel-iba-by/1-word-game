@@ -1,10 +1,4 @@
-﻿using System;
-using System.Text;
-using System.Text.RegularExpressions;
-using System.Timers;
-using Timer = System.Timers.Timer;
-
-namespace _1_word_game
+﻿namespace _1_word_game
 {
     internal class Game
     {
@@ -17,18 +11,29 @@ namespace _1_word_game
              \/  \/ \___/|_|  \__,_|___/  \_____|\__,_|_| |_| |_|\___|
                                                               
         ";
+        private const string SalutePicture = @"
+                                        .''.       
+            .''.      .        *''*    :_\/_:     . 
+            :_\/_:   _\(/_  .:.*_\/_*   : /\ :  .'.:.'.
+        .''.: /\ :   ./)\   ':'* /\ * :  '..'.  -=:o:=-
+        :_\/_:'.:::.    ' *''*    * '.\'/.' _\(/_'.':'.'
+        : /\ : :::::     *_\/_*     -= o =-  /)\    '  *
+        '..'  ':::'     * /\ *     .'/.\'.   '
+                                   *..*         :    
+        ";
         private const string Rule = "Create words from the original word as much as possible.";
+        private const string AvailableCommands = @"Available Commands: /show-words, /score, /total-score";
+        private const string DataFileName = "data.json";
+
         public string originalWord = string.Empty;
         public Player[] players = new Player[2];
         public Player currPlayer;
         public int currPlayerIdx = 0;
-        private bool gameOver = false;
-        private string inputError = string.Empty;
-        private byte countdown = 0;
-        private Timer countdownTimer = new Timer();
-        private bool isCountdouwnRunning = false;
-        private string commandOutput = string.Empty;
-        private Storage Storage;
+        private bool _gameOver = false;
+        private string _commandOutput = string.Empty;
+        private Storage _storage;
+        private Validator _validator;
+        private Countdown _countdown;
 
 
         public Game()
@@ -36,51 +41,34 @@ namespace _1_word_game
             players[0] = new Player(1);
             players[1] = new Player(2);
             currPlayer = players[currPlayerIdx];
-            countdownTimer.Interval = 1000;
-            countdownTimer.Elapsed += CountdownTimerElapsed;
-            Storage = new Storage("data.json");
-            SetTotalScoreCurrentPlayers();
+            _storage = new Storage(DataFileName);
+            _validator = new Validator();
+            _countdown = new Countdown();
         }
 
         public void InitOriginalWord()
         {
-            const string Label = "Type a word between 8 and 30 characters long: ";
             do
             {
-                NextPrintMessages(Name, inputError, Label);
-                string? input = Console.ReadLine();
+                InputOutput.PrintMessages(messages: [Name, _validator.InputError()], clearScreen: true);
+                string input = InputOutput.GetInput("Type a word between 8 and 30 characters long: ");
+                _validator.UpdateInput(input);
+                _validator.ValidationInputOriginalWord();
 
-                if (ValidInputOriginalWord(input))
-                {
-                    originalWord = input.ToLower();
-                }
+                if (_validator.IsError()) continue;
+
+                originalWord = input.ToLower();
             }
             while (string.IsNullOrEmpty(originalWord));
-        }
-
-        private void NextPrintMessages(params string[] messages)
-        {
-            Console.Clear();
-            for (int i = 0; i < messages.Length; i++)
-            {
-                if (string.IsNullOrEmpty(messages[i])) { continue; }
-                if (i == messages.Length - 1)
-                {
-                    Console.Write(messages[i]);
-                }
-                else
-                {
-                    Console.WriteLine(messages[i]);
-                }
-            }
         }
 
         public void NextTurnPrint()
         {
             string label = $"Original Word: {getStringUpperWithSpaces(originalWord)}";
-            string availableCommands = @"Available Commands: /show-words, /score, /total-score";
-            NextPrintMessages(Name, Rule, label, availableCommands, inputError);
-            Console.WriteLine();
+            InputOutput.PrintMessages(
+                messages: [Name, Rule, label, AvailableCommands, _validator.InputError()],
+                clearScreen: true
+                );
 
             string getStringUpperWithSpaces(string str)
             {
@@ -99,46 +87,27 @@ namespace _1_word_game
             currPlayer = players[currPlayerIdx];
         }
 
-
-        public bool CanBeCreated(string? word)
+        public void CheckAndAddPlayerWord()
         {
-            if (gameOver) { return false; }
-            if (string.IsNullOrEmpty(word))
+            if (!_countdown.IsRunning())
             {
-                inputError = "Empty input! Plaese try again.";
-                return false;
+                _gameOver = true;
+                return;
             }
-
-            string testWord = word.ToLower();
+            _validator.UpdateInput(currPlayer.GetInput());
+            if (_validator.IsInputCommand())
+            {
+                DoPlayerCommand();
+                return;
+            }
             string[] allWords = GetAllCurrentUsersWords();
+            _validator.ValidationPlayerWord(originalWord, allWords);
 
-            foreach (string w in allWords)
-            {
-                if (testWord == w)
-                {
-                    inputError = $"The word '{word}' is already exist! Please try again.";
-                    return false;
-                }
-            }
+            if (_validator.IsError()) return;
 
-            foreach (char c in originalWord.ToLower())
-            {
-                int index = testWord.IndexOf(c);
-
-                if (index >= 0)
-                {
-                    testWord = testWord.Remove(index, 1);
-                }
-            }
-
-            if (!string.IsNullOrEmpty(testWord))
-            {
-                inputError = $"The word '{word}' cannot be create from original word! Please try again.";
-                return false;
-            }
-
-            inputError = string.Empty;
-            return true;
+            currPlayer.AddWord();
+            SwitchPlayer();
+            _countdown.Stop();
         }
 
         private string[] GetAllCurrentUsersWords()
@@ -148,160 +117,87 @@ namespace _1_word_game
             return player1Words.Concat(player2Words).ToArray();
         }
 
-        private bool ValidInputOriginalWord(string? input)
-        {
-            if (string.IsNullOrEmpty(input))
-            {
-                inputError = "Input is empty! Please try again";
-                return false;
-            }
-            if (input.Length < 8)
-            {
-                inputError = "The word is too short! Please try again.";
-                return false;
-            }
-            if (input.Length > 30)
-            {
-                inputError = "The word is too long! Please try again.";
-                return false;
-            }
-            if (Regex.IsMatch(input, @"[^a-zA-Z]"))
-            {
-                inputError = "The word should contain only letters! Please try again.";
-                return false;
-            }
-            inputError = string.Empty;
-            return true;
-        }
         public bool IsOver()
         {
-            return gameOver;
+            return _gameOver;
         }
 
         public void RunCountdown()
         {
-            if (!isCountdouwnRunning)
+            if (_countdown != null)
             {
-                countdown = 30;
-                countdownTimer.Stop();
-                countdownTimer.Start();
-                isCountdouwnRunning = true;
-            }
-        }
-
-        public void ResetCountdown()
-        {
-            isCountdouwnRunning = false;
-        }
-
-        private void CountdownTimerElapsed(object sender, ElapsedEventArgs e)
-        {
-            countdown--;
-
-            int currentLineCursor = Console.CursorTop;
-            int currenPosCursor = Console.CursorLeft;
-            Console.SetCursorPosition(0, currentLineCursor + 1);
-            Console.Write(new string(' ', Console.WindowWidth));
-            Console.SetCursorPosition(0, currentLineCursor + 1);
-            Console.WriteLine($"Time left: {countdown} seconds");
-            Console.SetCursorPosition(currenPosCursor, currentLineCursor);
-
-            if (countdown <= 0)
-            {
-                countdownTimer.Stop();
-                gameOver = true;
-                Console.WriteLine("Time is up! Please press Enter.");
+                _countdown.Start();
             }
         }
 
         public void PrintWinner()
         {
             SwitchPlayer();
-            Console.WriteLine();
-            Console.WriteLine("Game over.");
-            Console.WriteLine($"The {currPlayer.name} wins. Congratulations!");
-            Console.WriteLine(@"
-                                                   .''.       
-                       .''.      .        *''*    :_\/_:     . 
-                      :_\/_:   _\(/_  .:.*_\/_*   : /\ :  .'.:.'.
-                  .''.: /\ :   ./)\   ':'* /\ * :  '..'.  -=:o:=-
-                 :_\/_:'.:::.    ' *''*    * '.\'/.' _\(/_'.':'.'
-                 : /\ : :::::     *_\/_*     -= o =-  /)\    '  *
-                  '..'  ':::'     * /\ *     .'/.\'.   '
-                                   *..*         :    
-            ");
+            InputOutput.PrintMessages(messages: ["", "Game over.", $"The {currPlayer.Name} wins. Congratulations!", SalutePicture]);
         }
 
-        public bool IsCommand(string input)
+        private void DoPlayerCommand()
         {
-            return input.StartsWith("/");
-        }
-
-        public void DoCommand(string command)
-        {
-            switch (command)
+            switch (currPlayer.GetInput())
             {
                 case "/show-words":
                     string[] allWords = GetAllCurrentUsersWords();
-                    commandOutput = $"All words entered by current users : {String.Join(", ", allWords)}";
+                    _commandOutput = $"All words entered by current users : {String.Join(", ", allWords)}";
                     break;
                 case "/score":
-                    commandOutput = $"Score: {players[0].name} = {players[0].totalScore}, {players[1].name} = {players[1].totalScore}";
+                    _commandOutput = $"Score: {players[0].Name} = {players[0].TotalScore}, {players[1].Name} = {players[1].TotalScore}";
                     break;
                 case "/total-score":
                     int totalGameScore = 0;
-                    foreach (var player in Storage.Players)
+                    foreach (var player in _storage.Players)
                     {
-                        totalGameScore += player.totalScore;
+                        totalGameScore += player.TotalScore;
                     }
-                        commandOutput = $"Total Score: {totalGameScore}";
+                    _commandOutput = $"Total Score: {totalGameScore}";
                     break;
                 default:
-                    commandOutput = "Unknown command";
+                    _commandOutput = "Unknown command";
                     break;
             }
         }
 
         public void PrintCommandOutput()
         {
-
-            if (!string.IsNullOrEmpty(commandOutput))
+            if (!string.IsNullOrEmpty(_commandOutput))
             {
-                int currentLineCursor = Console.CursorTop;
-                int currenPosCursor = Console.CursorLeft;
-                Console.SetCursorPosition(0, currentLineCursor + 3);
-                Console.WriteLine(commandOutput);
-                Console.SetCursorPosition(currenPosCursor, currentLineCursor);
+                InputOutput.PrintUnderCursorAndGoBack(messages: [_commandOutput], lineShift: 3);
             }
+            CleartCommandOutput();
         }
 
         public void CleartCommandOutput()
         {
-            commandOutput = string.Empty;
+            _commandOutput = string.Empty;
         }
 
         private int GetTotalScorePlayerByName(string name)
         {
-            Player p = Storage.Players.FirstOrDefault(player => player.name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            Player p = _storage.Players.FirstOrDefault(player => player.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
             if (p == null)
             {
                 return 0;
             }
-            return p.totalScore;
+            return p.TotalScore;
         }
 
-        private void SetTotalScoreCurrentPlayers()
+        public void SetTotalScoreCurrentPlayers()
         {
-            int totalScorePlayer1 = GetTotalScorePlayerByName(players[0].name);
-            players[0].totalScore = totalScorePlayer1;
-            int totalScorePlayer2 = GetTotalScorePlayerByName(players[1].name);
-            players[1].totalScore = totalScorePlayer2;
+            _storage.ReadFromFile();
+            int totalScorePlayer1 = GetTotalScorePlayerByName(players[0].Name);
+            players[0].TotalScore = totalScorePlayer1;
+            int totalScorePlayer2 = GetTotalScorePlayerByName(players[1].Name);
+            players[1].TotalScore = totalScorePlayer2;
         }
 
         public void SaveResults()
         {
-            Storage.AddOrUpdatePlayers(players);
-            Storage.WriteToFile();
+            _storage.AddOrUpdatePlayers(players);
+            _storage.WriteToFile();
         }
     }
 }

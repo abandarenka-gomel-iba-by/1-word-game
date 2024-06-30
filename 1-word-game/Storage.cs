@@ -1,31 +1,27 @@
-﻿using System;
-using System.Text;
-using System.IO;
-using System.Text.Json;
+﻿using System.Text.Json;
 
 namespace _1_word_game
 {
     internal class Storage
     {
         public Player[] Players { get; set; } = Array.Empty<Player>();
-        public string filePath { get; set; }
+        public string FilePath { get; set; }
 
         public Storage(string filePath)
         {
-            this.filePath = filePath;
-            ReadFromFile();
+            FilePath = filePath;
         }
 
         public void ReadFromFile()
         {
-            if (!File.Exists(filePath))
+            if (!File.Exists(FilePath))
             {
                 Players = Array.Empty<Player>();
                 WriteToFile();
             }
             else
             {
-                string jsonString = File.ReadAllText(filePath);
+                string jsonString = File.ReadAllText(FilePath);
 
                 var options = new JsonSerializerOptions
                 {
@@ -40,14 +36,14 @@ namespace _1_word_game
         public void WriteToFile()
         {
             string jsonString = JsonSerializer.Serialize(Players);
-            File.WriteAllText(filePath, jsonString);
+            File.WriteAllText(FilePath, jsonString);
         }
 
         public void AddOrUpdatePlayers(Player[] newPlayers)
         {
             foreach (var newPlayer in newPlayers)
             {
-                int index = Array.FindIndex(Players, player => player.name.Equals(newPlayer.name, StringComparison.OrdinalIgnoreCase));
+                int index = Array.FindIndex(Players, player => player.Name.Equals(newPlayer.Name, StringComparison.OrdinalIgnoreCase));
 
                 if (index >= 0)
                 {
